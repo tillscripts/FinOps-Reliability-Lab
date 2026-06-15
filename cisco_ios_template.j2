@@ -1,0 +1,74 @@
+{# ============================================================
+   Jinja2 Template — Cisco IOS Configuration
+   Consumed by: deploy_config_yaml.py / deploy_config_json.py
+   ============================================================ #}
+
+! ============================================================
+! Device: {{ device.hostname }}  |  Role: {{ device.role }}
+! Generated automatically — DO NOT EDIT MANUALLY
+! ============================================================
+
+! --- Global Settings ---
+hostname {{ device.hostname }}
+ip domain-name {{ global.domain_name }}
+clock timezone {{ global.timezone }} 0
+
+{% for ntp in global.ntp_servers %}
+ntp server {{ ntp }}
+{% endfor %}
+
+logging host {{ global.syslog_server }}
+snmp-server community {{ global.snmp.community_ro }} RO
+snmp-server community {{ global.snmp.community_rw }} RW
+snmp-server host {{ global.snmp.trap_host }} version 2c {{ global.snmp.community_ro }}
+
+! --- VLAN Definitions ---
+{% for vlan in device.vlans %}
+vlan {{ vlan.id }}
+ name {{ vlan.name }}
+ ! {{ vlan.description }}
+{% endfor %}
+
+! --- Interface Configuration ---
+{% for iface in device.interfaces %}
+interface {{ iface.name }}
+ description {{ iface.description }}
+{% if iface.mode == 'trunk' %}
+ switchport mode trunk
+ switchport trunk native vlan {{ iface.native_vlan }}
+ switchport trunk allowed vlan {{ iface.trunk_vlans | join(',') }}
+{% elif iface.mode == 'access' %}
+ switchport mode access
+ switchport access vlan {{ iface.access_vlan }}
+ spanning-tree portfast
+{% endif %}
+{% if iface.shutdown %}
+ shutdown
+{% else %}
+ no shutdown
+{% endif %}
+!
+{% endfor %}
+
+! --- Access Control Lists ---
+{% for acl in device.acls %}
+ip access-list {{ acl.type }} {{ acl.name }}
+{% for rule in acl.rules %}
+ remark {{ rule.remark }}
+ {{ rule.seq }} {{ rule.action }} {{ rule.protocol }}
+{%- if rule.src == 'any' %} any{% else %} {{ rule.src }} {{ rule.src_wildcard }}{% endif %}
+{%- if rule.dst == 'any' %} any{% else %} {{ rule.dst }} {{ rule.dst_wildcard }}{% endif %}
+
+{% endfor %}
+{% endfor %}
+
+! --- OSPF Routing ---
+{% if device.ospf is defined %}
+router ospf {{ device.ospf.process_id }}
+ router-id {{ device.ospf.router_id }}
+{% for net in device.ospf.networks %}
+ network {{ net.network }} {{ net.wildcard }} area {{ net.area }}
+{% endfor %}
+{% endif %}
+
+! --- End of Configuration for {{ device.hostname }} ---

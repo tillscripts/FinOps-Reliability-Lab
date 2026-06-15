@@ -1,0 +1,130 @@
+# ============================================================
+# Network Configuration Data Model — YAML
+# Use Case: Multi-device VLAN, ACL & OSPF Provisioning
+# Target: Cisco IOS-style switches / routers
+# ============================================================
+
+global:
+  domain_name: corp.example.com
+  ntp_servers:
+    - 10.0.0.1
+    - 10.0.0.2
+  syslog_server: 10.0.0.50
+  timezone: "UTC"
+  snmp:
+    community_ro: "public_ro"
+    community_rw: "private_rw"
+    trap_host: 10.0.0.51
+
+devices:
+  - hostname: SW-CORE-01
+    mgmt_ip: 192.168.1.1
+    platform: cisco_ios
+    role: core_switch
+
+    vlans:
+      - id: 10
+        name: MGMT
+        description: "Management VLAN"
+      - id: 20
+        name: SERVERS
+        description: "Server Farm VLAN"
+      - id: 30
+        name: USERS
+        description: "End-User Access VLAN"
+      - id: 99
+        name: NATIVE
+        description: "Native/Trunk VLAN"
+
+    interfaces:
+      - name: GigabitEthernet0/1
+        description: "Uplink to CORE-ROUTER-01"
+        mode: trunk
+        trunk_vlans: [10, 20, 30, 99]
+        native_vlan: 99
+        shutdown: false
+
+      - name: GigabitEthernet0/2
+        description: "Access — Server A"
+        mode: access
+        access_vlan: 20
+        shutdown: false
+
+      - name: GigabitEthernet0/3
+        description: "Access — Workstation"
+        mode: access
+        access_vlan: 30
+        shutdown: false
+
+    acls:
+      - name: ACL_BLOCK_GUEST
+        type: extended
+        rules:
+          - seq: 10
+            action: deny
+            protocol: ip
+            src: 10.99.0.0
+            src_wildcard: 0.0.255.255
+            dst: 10.20.0.0
+            dst_wildcard: 0.0.255.255
+            remark: "Block GUEST from reaching SERVERS"
+          - seq: 20
+            action: permit
+            protocol: ip
+            src: any
+            dst: any
+            remark: "Permit all other traffic"
+
+    ospf:
+      process_id: 1
+      router_id: 192.168.1.1
+      networks:
+        - network: 192.168.1.0
+          wildcard: 0.0.0.255
+          area: 0
+        - network: 10.20.0.0
+          wildcard: 0.0.255.255
+          area: 0
+
+  - hostname: SW-ACCESS-01
+    mgmt_ip: 192.168.1.2
+    platform: cisco_ios
+    role: access_switch
+
+    vlans:
+      - id: 30
+        name: USERS
+        description: "End-User Access VLAN"
+      - id: 99
+        name: NATIVE
+        description: "Native/Trunk VLAN"
+
+    interfaces:
+      - name: GigabitEthernet0/1
+        description: "Uplink to SW-CORE-01"
+        mode: trunk
+        trunk_vlans: [30, 99]
+        native_vlan: 99
+        shutdown: false
+
+      - name: GigabitEthernet0/2
+        description: "Access — Workstation B"
+        mode: access
+        access_vlan: 30
+        shutdown: false
+
+      - name: GigabitEthernet0/3
+        description: "Access — Workstation C"
+        mode: access
+        access_vlan: 30
+        shutdown: false
+
+    acls: []
+
+    ospf:
+      process_id: 1
+      router_id: 192.168.1.2
+      networks:
+        - network: 192.168.1.0
+          wildcard: 0.0.0.255
+          area: 0
